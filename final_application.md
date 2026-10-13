@@ -1,6 +1,5 @@
-#Это просто копия zyryanov_application
 # Зырянов Илья - "Steam Analysis"
-### Группа 10 - И - 4
+### Группа 11 - И - 4
 ### Электронная почта: ilya.a.zyryanov@gmail.com
 ### Tg: GG_Gust
 ## [ НАЗВАНИЕ ПРОЕКТА ]
