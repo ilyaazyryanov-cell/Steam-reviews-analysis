@@ -41,7 +41,8 @@ jobs:
           script: |
             git config --global --add safe.directory /root/Steam-reviews-analysis
             cd /root/Steam-reviews-analysis
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             docker cp ./backend/. $(docker compose ps -q backend):/app/backend/
             docker compose restart backend
             docker compose up -d --build frontend

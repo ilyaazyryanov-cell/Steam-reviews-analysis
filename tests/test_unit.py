@@ -3,7 +3,7 @@ from starlette.testclient import TestClient
 
 from backend.main import app, calc_threshold, build_aspect_stats
 from backend.config import CANONICAL_ASPECTS
-from backend.database import get_connection
+from backend.database import get_connection, init_database
 
 
 class TestAspectLogic(unittest.TestCase):
@@ -40,6 +40,7 @@ class TestAspectLogic(unittest.TestCase):
 class TestApiEndpoints(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        init_database()
         cls.client = TestClient(app)
 
     def test_root_endpoint(self):
