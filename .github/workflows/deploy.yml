@@ -37,14 +37,20 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: 22
+          timeout: 30m
+          command_timeout: 30m
           script_stop: true
           script: |
             git config --global --add safe.directory /root/Steam-reviews-analysis
             cd /root/Steam-reviews-analysis
             git fetch origin main
             git reset --hard origin/main
-            docker cp ./backend/. $(docker compose ps -q backend):/app/backend/
-            docker compose restart backend
-            docker compose up -d --build frontend
+            if [ -n "$(docker compose ps -q backend)" ]; then
+              docker cp ./backend/. $(docker compose ps -q backend):/app/backend/
+              docker compose restart backend
+            else
+              docker compose up -d backend
+            fi
+            docker compose build frontend
+            docker compose up -d --no-deps frontend
             docker compose ps
-
