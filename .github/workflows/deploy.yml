@@ -39,6 +39,7 @@ jobs:
           port: 22
           script_stop: true
           script: |
+            git config --global --add safe.directory /root/Steam-reviews-analysis
             cd /root/Steam-reviews-analysis
             git pull origin main
             docker cp ./backend/. $(docker compose ps -q backend):/app/backend/
