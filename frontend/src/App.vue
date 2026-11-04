@@ -1,455 +1,198 @@
 <script setup>
 import { ref } from 'vue'
+import GameList from './components/GameList.vue'
+import GameDetails from './components/GameDetails.vue'
+import GameCompare from './components/GameCompare.vue'
 
-const search = ref('')
-const games = ref([])
+const currentView = ref('list')
 const selectedGame = ref(null)
-const aspects = ref([])
-const sortBy = ref('aspect')
-const descending = ref(false)
-const excludeNeutral = ref(false)
-const filterAspect = ref('')
-const minPositive = ref(0)
-const suggestions = ref([])
+const compareIds = ref(new Set())
+const showHelpModal = ref(false)
 
-async function searchGames() {
-  const response = await fetch(
-    `http://127.0.0.1:8000/games?search=${encodeURIComponent(search.value)}&aspect=${encodeURIComponent(filterAspect.value)}&min_positive=${minPositive.value}`
-  )
-
-  games.value = await response.json()
+function goHome() {
+  currentView.value = 'list'
 }
 
-async function getSuggestions() {
-  if (search.value.length < 3) {
-    suggestions.value = []
-    return
-  }
-
-  const response = await fetch(
-    `http://127.0.0.1:8000/games?search=${encodeURIComponent(search.value)}`
-  )
-
-  suggestions.value = await response.json()
-}
-
-async function selectSuggestion(game) {
-  search.value = game.name
-  suggestions.value = []
-
-  await searchGames()
-}
-
-function resetFilters() {
-  filterAspect.value = ''
-  minPositive.value = 0
-  searchGames()
-}
-
-async function selectGame(game) {
+function goToDetails(game) {
   selectedGame.value = game
-  await loadAspects()
+  currentView.value = 'details'
 }
 
-async function loadAspects() {
-  if (!selectedGame.value) {
-    return
+function goToCompare() {
+  if (compareIds.value.size > 0) currentView.value = 'compare'
+}
+
+function toggleCompare(gameId) {
+  const newSet = new Set(compareIds.value)
+  if (newSet.has(gameId)) {
+    newSet.delete(gameId)
+  } else {
+    newSet.add(gameId)
   }
-
-  const response = await fetch(
-    `http://127.0.0.1:8000/games/${selectedGame.value.id}/aspects?exclude_neutral=${excludeNeutral.value}&sort_by=${sortBy.value}&descending=${descending.value}`
-  )
-
-  aspects.value = await response.json()
+  compareIds.value = newSet
 }
 
-
+function clearCompare() {
+  compareIds.value = new Set()
+  currentView.value = 'list'
+}
 </script>
 
 <template>
-  <main class="container">
-    <h1>Steam Analysis</h1>
-
-    <div class="search-wrapper">
-      <div class="search-block">
-        <input
-          v-model="search"
-          type="text"
-          placeholder="Search for a game..."
-          @input="getSuggestions"
-          @keyup.enter="searchGames"
-        />
-
-        <button @click="searchGames">
-          Search
-        </button>
+  <main class="app-container">
+    <header class="header">
+      <div class="logo-container">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="7" cy="17" r="4"></circle>
+          <circle cx="17" cy="8" r="3"></circle>
+          <path d="M9.5 14.5L14.5 10.5"></path>
+          <path d="M17 11v6l-4-3"></path>
+          <path d="M3 3l18 18" stroke-opacity="0.2"></path>
+        </svg>
+        <h1>Steam Analysis</h1>
       </div>
-
-      <div v-if="suggestions.length > 0" class="suggestions">
-        <button
-          v-for="game in suggestions"
-          :key="game.id"
-          class="suggestion"
-          @click="selectSuggestion(game)"
-        >
-          {{ game.name }}
+      
+      <nav class="nav-buttons">
+        <button @click="showHelpModal = true" class="btn-help">Help</button>
+        <button @click="goHome" :class="{ active: currentView === 'list' }">Home</button>
+        <button @click="goToCompare" :disabled="compareIds.size === 0" :class="{ active: currentView === 'compare' }">
+          Compare ({{ compareIds.size }})
         </button>
-      </div>
-    </div>
+      </nav>
+    </header>
 
-    <div class="game-filters">
-      <label>
-        <span>Aspect:</span>
+    <GameList 
+      v-if="currentView === 'list'" 
+      :compareIds="compareIds" 
+      @toggle-compare="toggleCompare" 
+      @select-game="goToDetails" 
+    />
+    
+    <GameDetails 
+      v-else-if="currentView === 'details'" 
+      :key="selectedGame.id"
+      :game="selectedGame" 
+      :compareIds="compareIds"
+      @toggle-compare="toggleCompare" 
+      @go-back="goHome" 
+      @select-game="goToDetails" 
+    />
+    
+    <GameCompare 
+      v-else-if="currentView === 'compare'" 
+      :compareIds="compareIds" 
+      @go-back="goHome" 
+      @clear-compare="clearCompare"
+    />
 
-        <select v-model="filterAspect">
-          <option value="">All aspects</option>
-          <option value="Gameplay">Gameplay</option>
-          <option value="Graphics & Art Style">Graphics & Art Style</option>
-          <option value="Difficulty">Difficulty</option>
-          <option value="Story, Characters & Lore">Story, Characters & Lore</option>
-          <option value="Content & Replayability">Content & Replayability</option>
-          <option value="Audio">Audio</option>
-          <option value="Value & Monetization">Value & Monetization</option>
-        </select>
-      </label>
-
-      <label>
-        <span>Minimum positive:</span>
-
-        <div class="percentage-input">
-          <input
-            v-model.number="minPositive"
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-          />
-
-          <span>%</span>
+    <div v-if="showHelpModal" class="modal-overlay" @click.self="showHelpModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>How to use Steam Analysis</h3>
+          <button @click="showHelpModal = false" class="close-btn" aria-label="Close">✕</button>
         </div>
-      </label>
-
-      <button @click="searchGames">
-        Apply filter
-      </button>
-
-      <button @click="resetFilters">
-        Reset filters
-      </button>
-    </div>
-
-    <div v-if="games.length > 0" class="games-list">
-      <h2>Games</h2>
-
-      <button
-        v-for="game in games"
-        :key="game.id"
-        class="game-button"
-        @click="selectGame(game)"
-      >
-        {{ game.name }}
-      </button>
-    </div>
-
-    <div v-if="selectedGame" class="game-section">
-      <h2>{{ selectedGame.name }}</h2>
-
-      <div class="filters">
-        <label>
-          <input
-            v-model="excludeNeutral"
-            type="checkbox"
-            @change="loadAspects"
-          />
-
-          Exclude neutral mentions
-        </label>
-
-        <label>
-          Sort by:
-
-          <select v-model="sortBy" @change="loadAspects">
-            <option value="aspect">Aspect</option>
-            <option value="mentions">Mentions</option>
-            <option value="positive">Positive %</option>
-            <option value="negative">Negative %</option>
-            <option value="neutral">Neutral %</option>
-          </select>
-        </label>
-
-        <label>
-          <input
-            v-model="descending"
-            type="checkbox"
-            @change="loadAspects"
-          />
-
-          Descending
-        </label>
+        <div class="modal-body">
+          <ul class="help-list">
+            <li><strong>Search:</strong> Находите игры по названию или фильтруйте главную страницу по аспектам (например, "Performance"). Есть возможность установить минимальный положительный и максимальный негативный % отзывов по аспекту.</li>
+            <li><strong>Game Details:</strong> Кликните на карточку игры, чтобы увидеть детальную статистику по каждому аспекту. Доступен фильтр отзывов только за последние 90 дней и сортировка по упоминаниям, % позитивных/негативных/нейтральных, названию аспекта. Галочка "Descending" сортирует по убыванию. Можно исключить нейтральные отзывы из подсчёта галочкой "Exclude Neutral". Внизу страницы можно посмотреть похожие игры по оценкам.</li>
+            <li><strong>Compare Games:</strong> Ставьте галочку "Add to compare" на карточках игр. Выбрав несколько, нажмите "Compare" в верхнем меню, чтобы наглядно сравнить их сильные и слабые стороны. Победители выделяются зелёной заливкой. Вы можете очистить список сравнения из режима "Compare", нажав кнопку "Clear All".</li>
+          </ul>
+        </div>
       </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Aspect</th>
-            <th>Mentions</th>
-            <th>Positive</th>
-            <th>Negative</th>
-            <th>Neutral</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          <tr
-            v-for="aspect in aspects"
-            :key="aspect.aspect"
-          >
-            <td>{{ aspect.aspect }}</td>
-            <td>{{ aspect.mentions }}</td>
-            <td>{{ aspect.positive_percent }}%</td>
-            <td>{{ aspect.negative_percent }}%</td>
-            <td>{{ aspect.neutral_percent }}%</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
   </main>
 </template>
 
 <style>
-* {
-  box-sizing: border-box;
+:root { 
+  --primary: #2563eb; 
+  --bg: #f3f4f6; 
+  --surface: #ffffff; 
+  --text: #1f2937; 
+  --border: #e5e7eb; 
+  --pos: #10b981; 
+  --neg: #ef4444; 
+}
+body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); }
+.app-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+.logo-container { display: flex; align-items: center; gap: 12px; }
+.logo-container h1 { margin: 0; font-size: 24px; color: var(--text); }
+.logo-icon { width: 36px; height: 36px; color: var(--primary); }
+
+.nav-buttons { display: flex; gap: 10px; }
+.nav-buttons button { padding: 10px 20px; border: none; background: #e5e7eb; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s; }
+.nav-buttons button.active { background: var(--primary); color: white; }
+.nav-buttons button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); background: var(--surface); }
+.aspects-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+.aspects-table th, .aspects-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
+.aspects-table th { background: #f9fafb; font-weight: 600; color: #4b5563; }
+
+.btn-back-modern {
+  display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 14px;
+}
+.btn-back-modern:hover { background: #f9fafb; transform: translateX(-4px); border-color: #d1d5db; }
+
+.btn-help { background: transparent !important; color: #4b5563 !important; border: 1px solid #d1d5db !important; }
+.btn-help:hover { background: #f3f4f6 !important; }
+
+.modal-overlay { 
+  position: fixed; 
+  top: 0; 
+  left: 0; 
+  right: 0; 
+  bottom: 0; 
+  background: rgba(0,0,0,0.5); 
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  z-index: 100; 
+  padding: 16px; 
+  box-sizing: border-box; 
+}
+.modal-content { 
+  background: var(--surface); 
+  width: 100%; 
+  max-width: 600px; 
+  max-height: 85vh; 
+  border-radius: 12px; 
+  display: flex; 
+  flex-direction: column; 
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+  animation: fadeIn 0.2s ease-out; 
+  overflow: hidden; 
+  box-sizing: border-box; 
+}
+.modal-header { 
+  padding: 18px 20px; 
+  border-bottom: 1px solid var(--border); 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+}
+.modal-header h3 { margin: 0; font-size: 18px; color: var(--text); }
+.close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #9ca3af; transition: 0.2s; padding: 4px; line-height: 1; }
+.close-btn:hover { color: #ef4444; }
+.modal-body { padding: 20px; font-size: 14px; line-height: 1.6; color: #374151; overflow-y: auto; }
+.help-list { margin: 0; padding-left: 20px; }
+.help-list li { margin-bottom: 15px; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f4f5f7;
-  color: #222;
-}
-
-button,
-input,
-select {
-  font-family: inherit;
-}
-
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 40px 24px;
-}
-
-h1 {
-  margin: 0 0 8px;
-  font-size: 32px;
-}
-
-.search-wrapper {
-  position: relative;
-  margin-top: 28px;
-  margin-bottom: 24px;
-}
-
-.search-block {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 0;
-}
-
-.search-block input {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 14px;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: white;
-}
-
-.search-block input:focus {
-  outline: none;
-  border-color: #666;
-}
-
-.search-block button,
-.game-filters button {
-  padding: 10px 18px;
-  border: 1px solid #bbb;
-  border-radius: 6px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.search-block button:hover,
-.game-filters button:hover {
-  background: #eee;
-}
-
-.suggestions {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 110px;
-  z-index: 10;
-  overflow: hidden;
-  background: white;
-  border: 1px solid #ccc;
-  border-top: none;
-  border-radius: 0 0 6px 6px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-}
-
-.suggestion {
-  display: block;
-  width: 100%;
-  padding: 11px 14px;
-  border: none;
-  border-bottom: 1px solid #eee;
-  background: white;
-  text-align: left;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.suggestion:last-child {
-  border-bottom: none;
-}
-
-.suggestion:hover {
-  background: #f5f5f5;
-}
-
-.game-filters {
-  display: flex;
-  align-items: end;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 18px;
-  margin-bottom: 24px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-}
-
-.game-filters label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.percentage-input {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.game-filters select,
-.game-filters input {
-  padding: 9px 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  background: white;
-}
-
-.game-filters input {
-  width: 90px;
-}
-
-.games-list {
-  margin-bottom: 24px;
-  padding: 20px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-}
-
-.games-list h2 {
-  margin-top: 0;
-}
-
-.game-button {
-  display: block;
-  width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  text-align: left;
-  cursor: pointer;
-  font-size: 15px;
-}
-
-.game-button:last-child {
-  margin-bottom: 0;
-}
-
-.game-button:hover {
-  background: #f5f5f5;
-}
-
-.game-section {
-  padding: 20px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-}
-
-.game-section h2 {
-  margin-top: 0;
-}
-
-.filters {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.filters label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.filters select {
-  padding: 7px 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  background: white;
-}
-
-.filters input {
-  margin: 0;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  padding: 12px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
-}
-
-th {
-  background: #f0f1f3;
-  font-weight: 600;
-}
-
-tbody tr:hover {
-  background: #fafafa;
+@media (max-width: 768px) {
+  .app-container { padding: 10px; }
+  .header { flex-direction: column; gap: 15px; align-items: stretch; text-align: center; }
+  .nav-buttons { justify-content: center; width: 100%; flex-wrap: wrap; }
+  .nav-buttons button { flex: 1 1 30%; }
+  .logo-container { justify-content: center; }
 }
 </style>
